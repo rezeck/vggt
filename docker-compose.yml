@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  vggt-gradio:
+    build: .
+    image: vggt-gradio:latest
+    command: ["python", "demo_gradio.py"]
+    environment:
+      GRADIO_SERVER_NAME: 0.0.0.0
+      GRADIO_SERVER_PORT: 8031
+      VGGT_DEVICE: "${VGGT_DEVICE:-cuda}"
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility
+    ports:
+      - "8031:8031"
+    volumes:
+      - .:/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+
