@@ -24,7 +24,7 @@ from vggt.utils.load_fn import load_and_preprocess_images
 from vggt.utils.pose_enc import pose_encoding_to_extri_intri
 from vggt.utils.geometry import unproject_depth_map_to_point_map
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = os.environ.get("VGGT_DEVICE", "cuda" if torch.cuda.is_available() else "cpu")
 
 print("Initializing and loading VGGT model...")
 # model = VGGT.from_pretrained("facebook/VGGT-1B")  # another way to load the model
@@ -33,9 +33,13 @@ model = VGGT()
 _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
 model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
 
-
 model.eval()
-model = model.to(device)
+try:
+    model = model.to(device)
+except torch.cuda.OutOfMemoryError:
+    # Fallback to CPU if the GPU cannot hold the model
+    device = "cpu"
+    model = model.to(device)
 
 
 # -------------------------------------------------------------------------
@@ -47,12 +51,7 @@ def run_model(target_dir, model) -> dict:
     """
     print(f"Processing images from {target_dir}")
 
-    # Device check
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    if not torch.cuda.is_available():
-        raise ValueError("CUDA is not available. Check your environment.")
-
-    # Move model to device
+    # Move model to device (may already be on correct device)
     model = model.to(device)
     model.eval()
 
@@ -68,10 +67,19 @@ def run_model(target_dir, model) -> dict:
 
     # Run inference
     print("Running inference...")
-    dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    if device == "cuda" and torch.cuda.is_available():
+        dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    else:
+        dtype = torch.float32
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast(dtype=dtype):
+        if device == "cuda" and torch.cuda.is_available():
+            autocast_ctx = torch.cuda.amp.autocast(dtype=dtype)
+        else:
+            from contextlib import nullcontext
+            autocast_ctx = nullcontext()
+
+        with autocast_ctx:
             predictions = model(images)
 
     # Convert pose encoding to extrinsic and intrinsic matrices
