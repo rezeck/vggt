@@ -94,6 +94,16 @@ def run_model(target_dir, model) -> dict:
             predictions[key] = predictions[key].cpu().numpy().squeeze(0)  # remove batch dimension
     predictions['pose_enc_list'] = None # remove pose_enc_list
 
+    # Log and persist camera parameters
+    intrinsic_np = predictions.get("intrinsic")
+    extrinsic_np = predictions.get("extrinsic")
+    if intrinsic_np is not None:
+        print(f"[VGGT] Intrinsic shape: {intrinsic_np.shape}\n{intrinsic_np}")
+        np.save(os.path.join(target_dir, "intrinsic.npy"), intrinsic_np)
+    if extrinsic_np is not None:
+        print(f"[VGGT] Extrinsic shape: {extrinsic_np.shape}\n{extrinsic_np}")
+        np.save(os.path.join(target_dir, "extrinsic.npy"), extrinsic_np)
+
     # Generate world points from depth map
     print("Computing world points from depth map...")
     depth_map = predictions["depth"]  # (S, H, W, 1)
